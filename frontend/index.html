@@ -1,134 +1,104 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>Piano App</title>
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: Arial, sans-serif;
-    }
-
-    .background {
-      background-image: url('https://source.unsplash.com/1600x900/?piano');
-      height: 100%;
-      background-position: center;
-      background-repeat: no-repeat;
-      background-size: cover;
-      position: fixed;
-      width: 100%;
-      z-index: -1;
-    }
-
-    .container {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100%;
-    }
-
-    .login-box {
-      background: rgba(255, 255, 255, 0.8);
-      padding: 20px 40px;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.3);
-    }
-
-    .login-box h2 {
-      margin-top: 0;
-      text-align: center;
-    }
-
-    .login-box input {
-      width: 100%;
-      padding: 10px;
-      margin: 10px 0;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-    }
-
-    .login-box button {
-      width: 100%;
-      padding: 10px;
-      border: none;
-      border-radius: 5px;
-      background-color: #5c6bc0;
-      color: white;
-      font-size: 16px;
-      cursor: pointer;
-    }
-
-    .login-box button:hover {
-      background-color: #3f51b5;
-    }
-
-    .social-buttons {
-      display: flex;
-      justify-content: space-between;
-      margin-top: 10px;
-    }
-
-    .social-buttons button {
-      flex: 1;
-      margin: 0 5px;
-      padding: 10px;
-      border: none;
-      border-radius: 5px;
-      color: white;
-      cursor: pointer;
-    }
-
-    .google-btn { background-color: #db4437; }
-    .meta-btn { background-color: #4267B2; }
-    .x-btn { background-color: #1DA1F2; }
-
-    .signup-link {
-      text-align: center;
-      margin-top: 10px;
-    }
-
-    .signup-link a {
-      color: #3f51b5;
-      text-decoration: none;
-    }
-
-    .signup-link a:hover {
-      text-decoration: underline;
-    }
-  </style>
+    <meta charset="UTF-8" />
+    <title>Piano Map</title>
+    <style>
+        /*
+         * The map must have an explicit height to appear on the page. The
+         * height is set to 100vh (viewport height) so it fills the entire
+         * screen. Width is 100% to span the full width of the page.
+         */
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+    </style>
 </head>
 <body>
-  <div class="background"></div>
-  <div id="root"></div>
+    <!-- Root element for our React application -->
+    <div id="root"></div>
 
-  <script src="https://unpkg.com/react@17/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
-  <script type="text/babel">
-    function App() {
-      return (
-        <div className="container">
-          <div className="login-box">
-            <h2>Welcome to Piano App</h2>
-            <input type="text" placeholder="Username or Email" />
-            <input type="password" placeholder="Password" />
-            <button>Log In</button>
-            <div className="social-buttons">
-              <button className="google-btn">Sign in with Google</button>
-              <button className="meta-btn">Sign in with Meta</button>
-              <button className="x-btn">Sign in with X</button>
-            </div>
-            <div className="signup-link">
-              <span>Don't have an account? <a href="#">Sign up</a></span>
-            </div>
-          </div>
-        </div>
-      );
-    }
+    <!-- React and ReactDOM from unpkg for convenience -->
+    <script src="https://unpkg.com/react@17/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.production.min.js" crossorigin></script>
+    <!-- Load Google Maps JavaScript API. Replace YOUR_API_KEY with an actual API key. -->
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY"></script>
+    <!-- We will use Babel to allow JSX in our inline script -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    ReactDOM.render(<App />, document.getElementById('root'));
-  </script>
+    <script type="text/babel">
+        /**
+         * Main React component that renders a map and populates it with piano
+         * markers fetched from the backend. On mount it waits for the Google
+         * Maps API to load, then retrieves the piano locations from the
+         * backend ("/pianos" endpoint) and displays each one as a marker.
+         */
+        function App() {
+            const [pianos, setPianos] = React.useState([]);
+
+            // Fetch piano locations once when the component mounts
+            React.useEffect(() => {
+                fetch('/pianos')
+                    .then(response => response.json())
+                    .then(data => setPianos(data))
+                    .catch(err => console.error('Error fetching pianos:', err));
+            }, []);
+
+            // Initialize the map and add markers once both Google Maps and piano
+            // data are available. This effect runs every time pianos change.
+            React.useEffect(() => {
+                // Helper to wait for Google Maps library to load
+                function ensureGoogleMapsLoaded(callback) {
+                    if (window.google && window.google.maps) {
+                        callback();
+                    } else {
+                        // Retry after a short delay if not yet loaded
+                        setTimeout(() => ensureGoogleMapsLoaded(callback), 200);
+                    }
+                }
+
+                ensureGoogleMapsLoaded(() => {
+                    // Determine an initial map centre. Default to London if no pianos yet.
+                    const defaultCenter = { lat: 51.5074, lng: -0.1278 };
+                    const first = pianos && pianos.length > 0 ? pianos[0] : null;
+                    const center = first
+                        ? {
+                            lat: first.latitude !== undefined ? first.latitude : first.Latitude,
+                            lng: first.longitude !== undefined ? first.longitude : first.Longitude
+                        }
+                        : defaultCenter;
+
+                    // Create the map instance on the #map element. If a map already exists
+                    // we replace it by recreating (Google Maps API does not support
+                    // re-initialization on the same element without a refresh).
+                    const mapElement = document.getElementById('map');
+                    const map = new window.google.maps.Map(mapElement, {
+                        center: center,
+                        zoom: pianos && pianos.length > 0 ? 10 : 5,
+                    });
+
+                    // Add a marker for each piano
+                    (pianos || []).forEach(p => {
+                        const lat = p.latitude !== undefined ? p.latitude : p.Latitude;
+                        const lng = p.longitude !== undefined ? p.longitude : p.Longitude;
+                        const name = p.name !== undefined ? p.name : p.Name;
+                        new window.google.maps.Marker({
+                            position: { lat: lat, lng: lng },
+                            map: map,
+                            title: name,
+                        });
+                    });
+                });
+            }, [pianos]);
+
+            // Render the map container. React does not control the inside of this div;
+            // Google Maps API will populate it.
+            return <div id="map"></div>;
+        }
+
+        // Render the App component into the root element
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
 </body>
 </html>
